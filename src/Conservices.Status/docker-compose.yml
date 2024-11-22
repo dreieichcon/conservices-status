@@ -13,3 +13,6 @@
       dockerfile: Conservices.Status/Dockerfile
       args:
         - CERT_PASS=${cert_pass}
+    volumes:
+      - "./logs/:/app/logs/"
+      - "./keys/:/app/keys/"

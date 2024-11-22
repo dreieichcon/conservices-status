@@ -6,7 +6,7 @@ public class ApiResponseResult
 
 	public string ResponseDateString => ResponseDate.ToString("HH:mm");
 	
-	public int? ResponseTimeMs { get; init; }
+	public int ResponseTimeMs { get; init; }
 	
 	public bool IsSuccess { get; set; }
 
@@ -21,6 +21,7 @@ public class ApiResponseResult
 	public static ApiResponseResult Failed()
 		=> new()
 		{
+			ResponseTimeMs = 5000,
 			ResponseDate = DateTime.UtcNow,
 			IsSuccess = true,
 		};

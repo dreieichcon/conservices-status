@@ -1,11 +1,30 @@
+using System.Diagnostics;
 using ApexCharts;
 using Conservices.Status.Components;
 using Conservices.Status.Repositories.Implementations;
 using Conservices.Status.Repositories.Interfaces;
 using Conservices.Status.Services.Implementation;
 using Conservices.Status.Services.Interfaces;
+using Microsoft.AspNetCore.DataProtection;
 using MudBlazor.Services;
+using Serilog;
+using Serilog.Events;
 using Index = Conservices.Status.Ui.Modules.Index.Index;
+
+if (!Directory.Exists("./logs/"))
+	Directory.CreateDirectory("./logs/");
+
+Log.Logger = new LoggerConfiguration()
+			.MinimumLevel.Debug()
+			.WriteTo.Console()
+			.WriteTo.Debug()
+			.WriteTo.Trace()
+			.WriteTo.File(
+				"./logs/",
+				rollingInterval: RollingInterval.Day,
+				restrictedToMinimumLevel: LogEventLevel.Information
+			)
+			.CreateLogger();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -64,10 +83,19 @@ builder.Services.AddApexCharts(
 	}
 );
 
-builder.Services.AddKeyedSingleton<IPingRepository, ConservicesPingRepository>("conservices.de");
+builder.Services.AddKeyedSingleton<IPingRepository, ConservicesApiPingRepository>("conservices.de");
 builder.Services.AddKeyedSingleton<IPingRepository, ConnectPingRepository>("connect.conservices.de");
+builder.Services.AddKeyedSingleton<IServerStatusRepository, ConservicesServerStatusRepository>("conservices-server");
 
 builder.Services.AddSingleton<IApiResponseService, ApiResponseService>();
+builder.Services.AddSingleton<IServerUptimeService, ServerUptimeService>();
+
+if (!Directory.Exists("./keys/"))
+	Directory.CreateDirectory("./keys/");
+
+builder
+	.Services.AddDataProtection()
+	.PersistKeysToFileSystem(new DirectoryInfo("./keys/"));
 
 var app = builder.Build();
 
@@ -90,6 +118,11 @@ app
 	.AddInteractiveServerRenderMode()
 	.AddAdditionalAssemblies(typeof(Index).Assembly);
 
-_ = app.Services.GetRequiredService<IApiResponseService>();
+var timerService = app.Services.GetRequiredService<IApiResponseService>();
+var statusService = app.Services.GetRequiredService<IServerUptimeService>();
+
+Log.Debug("Starting Api Timer");
+Task.Run(timerService.ApiResponseTimer);
+Task.Run(statusService.ServerResponseTimer);
 
 await app.RunAsync();

@@ -1,58 +1,122 @@
 ﻿@page "/"
 
+@using Conservices.Status.Core.Enum
 @using Conservices.Status.Core.Models
 @using Conservices.Status.Services.Interfaces
+@using Color = MudBlazor.Color
 @inject IApiResponseService ApiResponseService
+@inject IServerUptimeService ServerUptimeService
 
-<MudGrid AlignItems="AlignItems.Center">
-    <MudItem xs="4">
-        <MudCard Style="width: 100%; height: 400px">
-            <MudCardHeader>
-                <MudStack AlignItems="AlignItems.Center" Style="width: 100%">
-                    <MudText Typo="Typo.h6">API Response Time (Conservices.de)</MudText>
-                    <MudDivider FlexItem="false"></MudDivider>
-                </MudStack>
-            </MudCardHeader>
-            <MudCardContent>
-                <ApexChart TItem="ApiResponseResult">
-                    <ApexPointSeries 
-                        TItem="ApiResponseResult" 
-                        Items="ApiResponseService.ApiResponsesConservices"
-                        SeriesType="SeriesType.Line"
-                        XValue="x => x.ResponseDateString"
-                        YValue="x => x.ResponseTimeMs">
-                    </ApexPointSeries>
-                </ApexChart>
-            </MudCardContent>
-        </MudCard>
-    </MudItem>
-    <MudItem xs="4">
-        <MudCard Style="width: 100%; height: 400px">
-            <MudCardHeader>
-                <MudStack AlignItems="AlignItems.Center" Style="width: 100%">
-                    <MudText Typo="Typo.h6">API Response Time (connect.conservices.de)</MudText>
-                    <MudDivider FlexItem="false"></MudDivider>
-                </MudStack>
-            </MudCardHeader>
-            <MudCardContent>
-                <ApexChart TItem="ApiResponseResult">
-                    <ApexPointSeries
-                        TItem="ApiResponseResult"
-                        Items="ApiResponseService.ApiResponsesConnect"
-                        SeriesType="SeriesType.Line"
-                        XValue="x => x.ResponseDateString"
-                        YValue="x => x.ResponseTimeMs">
-                    </ApexPointSeries>
-                </ApexChart>
-            </MudCardContent>
-        </MudCard>
-    </MudItem>
-</MudGrid>
+<MudStack>
+    <MudPaper Style="padding: 1rem;">
+        <MudStack>
+            <MudText Typo="Typo.h6">Server Status</MudText>
+            <MudDivider FlexItem="false"/>
+            <MudTimeline 
+                TimelineOrientation="TimelineOrientation.Horizontal" 
+                TimelinePosition="TimelinePosition.Top">
+                @foreach (var grouping in ServerStatus)
+                {
+                    <MudTimelineItem Color="@GetColorFromStatus(grouping.ServerPerformance)" Style="max-width: 25% !important;">
+                        <ItemContent>
+                            <MudAlert Severity="@GetSeverityFromStatus(grouping.ServerPerformance)">
+                                <MudText>@grouping.ServerDate.ToString(): @grouping.ServerPerformance</MudText>
+                            </MudAlert>
+                        </ItemContent>
+                    </MudTimelineItem>
+                }
+            </MudTimeline>
+        </MudStack>
+    </MudPaper>
+    <MudGrid>
+        <MudItem xs="4">
+            <MudCard Style="width: 100%; height: 400px">
+                <MudCardHeader>
+                    <MudStack AlignItems="AlignItems.Center" Style="width: 100%">
+                        <MudStack Row="true" AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.h6">API Response Time (Conservices.de)</MudText>
+                            <MudText>(@AverageResponseConservices.ToString("F2") ms average)</MudText>
+                        </MudStack>
+                        <MudDivider FlexItem="false"></MudDivider>
+                    </MudStack>
+                </MudCardHeader>
+                <MudCardContent>
+                    <ApexChart TItem="ApiResponseResult">
+                        <ApexPointSeries
+                            TItem="ApiResponseResult"
+                            Items="ApiResponseService.ApiResponsesConservices"
+                            SeriesType="SeriesType.Line"
+                            XValue="x => x.ResponseDateString"
+                            YValue="x => x.ResponseTimeMs">
+                        </ApexPointSeries>
+                    </ApexChart>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+</MudStack>
+
 
 @code {
 
+    private IEnumerable<ServerResponseGroupingDaily> ServerStatus { get; set; } = [];
+
+    private double AverageResponseConservices { get; set; }
+
+    private static Color GetColorFromStatus(Performance performance)
+    {
+        return performance switch
+        {
+            Performance.Ok => Color.Success,
+            Performance.Medium => Color.Primary,
+            Performance.Degraded => Color.Warning,
+            Performance.Critical => Color.Error,
+            _ => throw new ArgumentOutOfRangeException(nameof(performance), performance, null)
+        };
+    }
+    
+    private static Severity GetSeverityFromStatus(Performance performance)
+    {
+        return performance switch
+        {
+            Performance.Ok => Severity.Success,
+            Performance.Medium => Severity.Info,
+            Performance.Degraded => Severity.Warning,
+            Performance.Critical => Severity.Error,
+            _ => throw new ArgumentOutOfRangeException(nameof(performance), performance, null)
+        };
+    }
+
     protected override async Task OnInitializedAsync()
     {
+        AverageResponseConservices = ApiResponseService.ApiResponsesConservices.Any()
+            ? ApiResponseService.ApiResponsesConservices.Average(x => x.ResponseTimeMs)
+            : 0;
+
+        ServerStatus = ServerUptimeService
+                       .ServerResponses.GroupBy(x => DateOnly.FromDateTime(x.ResponseDate))
+                       .Select(
+                           x =>
+                           {
+                               var outages = x.Count(y => y.IsSuccess == false);
+
+                               var serverPerformance = outages switch
+                               {
+                                   0 => Performance.Ok,
+                                   > 0 and < 2 => Performance.Medium,
+                                   > 2 and < 4 => Performance.Degraded,
+                                   > 4 => Performance.Critical,
+                                   _ => Performance.Ok,
+                               };
+
+                               return new ServerResponseGroupingDaily()
+                               {
+                                   ServerDate = x.Key,
+                                   ServerPerformance = serverPerformance,
+                               };
+                           }
+                       );
+
         await InvokeAsync(StateHasChanged);
     }
 

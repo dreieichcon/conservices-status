@@ -1,9 +1,8 @@
-﻿using System.Diagnostics;
-using System.Net.NetworkInformation;
-using Conservices.Status.Core.Models;
+﻿using Conservices.Status.Core.Models;
 using Conservices.Status.Repositories.Interfaces;
 using Conservices.Status.Services.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
+using Serilog;
 
 namespace Conservices.Status.Services.Implementation;
 
@@ -16,7 +15,7 @@ public class ApiResponseService : IApiResponseService
 
 	public IList<ApiResponseResult> ApiResponsesConnect { get; set; } = [];
 
-	private readonly PeriodicTimer _apiResponseTimer = new(TimeSpan.FromMinutes(5));
+	private readonly PeriodicTimer _apiResponseTimer = new(TimeSpan.FromMinutes(1));
 
 	public ApiResponseService(
 		[FromKeyedServices("conservices.de")] IPingRepository conservicesPingRepository,
@@ -25,15 +24,18 @@ public class ApiResponseService : IApiResponseService
 	{
 		_conservicesPingRepository = conservicesPingRepository;
 		_connectPingRepository = connectPingRepository;
-		Task.Run(ApiResponseTimer);
 	}
 
-	private async Task ApiResponseTimer()
+	public async Task ApiResponseTimer()
 	{
+		Log.Debug("Api Timer Initialized");
+		ApiResponsesConservices.Add(await _conservicesPingRepository.Ping());
+		// ApiResponsesConnect.Add(await _connectPingRepository.Ping());
+		
 		while (await _apiResponseTimer.WaitForNextTickAsync())
 		{
 			ApiResponsesConservices.Add(await _conservicesPingRepository.Ping());
-			ApiResponsesConnect.Add(await _connectPingRepository.Ping());
+			// ApiResponsesConnect.Add(await _connectPingRepository.Ping());
 			UpdateTimerList();
 		}
 	}

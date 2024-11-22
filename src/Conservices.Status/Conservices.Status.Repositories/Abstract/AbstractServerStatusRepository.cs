@@ -5,11 +5,11 @@ using Serilog;
 
 namespace Conservices.Status.Repositories.Abstract;
 
-public abstract class AbstractHostnamePingRepository : IPingRepository
+public abstract class AbstractServerStatusRepository : IServerStatusRepository
 {
 	protected abstract string HostName { get; }
 	
-	public async Task<ApiResponseResult> Ping()
+	public async Task<ServerResponseResult> GetServerStatus()
 	{
 		using var ping = new Ping();
 
@@ -22,13 +22,13 @@ public abstract class AbstractHostnamePingRepository : IPingRepository
 				Log.Debug("Received response in {RoundTripTime} ms", reply.RoundtripTime);
 			
 			return reply.Status == IPStatus.Success
-				? ApiResponseResult.Success((int)reply.RoundtripTime)
-				: ApiResponseResult.Failed();
+				? ServerResponseResult.Success()
+				: ServerResponseResult.Failed();
 		}
 		catch (PingException ex)
 		{
 			Log.Error(ex, "Pinging {HostName} failed", HostName);
-			return ApiResponseResult.Failed();
+			return ServerResponseResult.Failed();
 		}
 	}
 }
