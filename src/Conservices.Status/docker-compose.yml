@@ -1,0 +1,15 @@
+﻿services:
+  conservices.status:
+    image: hub.demolite.de/demoreg/conservices.status
+    container_name: conservices.status
+    restart: always
+    ports: 
+      - "9000:8080"
+      - "9001:8081"
+    env_file:
+      - .env
+    build:
+      context: .
+      dockerfile: Conservices.Status/Dockerfile
+      args:
+        - CERT_PASS=${cert_pass}
